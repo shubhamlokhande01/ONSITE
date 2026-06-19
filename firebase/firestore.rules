@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/roles/$(request.auth.uid))
+        && get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Roles: a user can read their own role; only admins (or the very first
+    // sign-up, when no admin exists yet) can write.
+    match /roles/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if isSignedIn() && request.auth.uid == uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // Employees: signed-in users can read; only admins can write, except a
+    // user can create their own employee doc at sign-up.
+    match /employees/{uid} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == uid;
+      allow update, delete: if isAdmin() || request.auth.uid == uid;
+    }
+
+    // Tasks: signed-in users can read. Admins write.
+    // Employees can update only the status field of their own tasks.
+    match /tasks/{taskId} {
+      allow read: if isSignedIn();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || (isSignedIn()
+            && resource.data.assignedTo == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']));
+    }
+
+    // Attendance: employee writes their own; admin reads all.
+    match /attendance/{recordId} {
+      allow read: if isSignedIn() && (isAdmin() || resource.data.employeeId == request.auth.uid);
+      allow create, update: if isSignedIn() && request.resource.data.employeeId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
+    // Field photos.
+    match /photos/{photoId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.employeeId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
+    }
+
+    // Locations (latest ping history).
+    match /locations/{id} {
+      allow read: if isSignedIn() && (isAdmin() || resource.data.employeeId == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.employeeId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+  }
+}
