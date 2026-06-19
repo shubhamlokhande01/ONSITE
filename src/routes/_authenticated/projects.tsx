@@ -16,6 +16,7 @@ import {
   PROJECT_CATEGORIES, STATUS_LABELS, STATUS_COLORS,
   computeProjectFinancials, fmt, fmtCompact,
 } from "@/lib/project-types";
+import { logActivity } from "@/lib/activity-logger";
 
 export const Route = createFileRoute("/_authenticated/projects")({
   component: ProjectsPage,
@@ -77,10 +78,11 @@ function ProjectsPage() {
       const id = editing.projectId || crypto.randomUUID();
       const data: Project = {
         ...editing, projectId: id,
-        createdAt: Date.now(), createdBy: user.uid,
+        createdAt: Date.now(), createdBy: user.uid, createdByEmail: user.email,
       };
       if (editing.projectId) {
         await updateDoc(doc(db, "projects", id), { ...data });
+        await logActivity(user, "UPDATED_PROJECT", { projectId: id, projectName: data.projectName });
         if (data.actualCost > data.totalBudget && data.totalBudget > 0) {
           await setDoc(doc(db, "notifications", crypto.randomUUID()), {
             notifId: crypto.randomUUID(), type: "budget_exceeded",
@@ -92,6 +94,7 @@ function ProjectsPage() {
         toast.success("Project updated");
       } else {
         await setDoc(doc(db, "projects", id), data);
+        await logActivity(user, "CREATED_PROJECT", { projectId: id, projectName: data.projectName });
         toast.success("Project created");
       }
       setEditing(null);
@@ -104,6 +107,7 @@ function ProjectsPage() {
   const remove = async (id: string, name: string) => {
     if (!confirm(`Delete project "${name}"?`)) return;
     await deleteDoc(doc(getDb(), "projects", id));
+    await logActivity(user, "DELETED_PROJECT", { projectId: id, projectName: name });
     toast.success("Project deleted");
     await load();
   };
@@ -121,11 +125,12 @@ function ProjectsPage() {
           incomeId: id, projectId: quickTx.projectId, projectName: quickTx.projectName,
           amount: Number(txAmount), paymentDate: new Date().toISOString().split("T")[0],
           paymentMethod: "cash", category: "Project Payment", description: txDesc,
-          createdAt: Date.now(), createdBy: user.uid, invoiceUrl: ""
+          createdAt: Date.now(), createdBy: user.uid, createdByEmail: user.email, invoiceUrl: ""
         });
         await updateDoc(doc(db, "projects", quickTx.projectId), {
           receivedRevenue: (proj.receivedRevenue || 0) + Number(txAmount)
         });
+        await logActivity(user, "ADDED_QUICK_CASH_IN", { projectId: quickTx.projectId, amount: Number(txAmount) });
         toast.success("Cash In recorded successfully");
       } else {
         const id = crypto.randomUUID();
@@ -133,11 +138,12 @@ function ProjectsPage() {
           expenseId: id, projectId: quickTx.projectId, projectName: quickTx.projectName,
           amount: Number(txAmount), expenseType: "miscellaneous", vendorName: "",
           date: new Date().toISOString().split("T")[0], description: txDesc,
-          createdAt: Date.now(), createdBy: user.uid, billUrl: ""
+          createdAt: Date.now(), createdBy: user.uid, createdByEmail: user.email, billUrl: ""
         });
         await updateDoc(doc(db, "projects", quickTx.projectId), {
           actualCost: (proj.actualCost || 0) + Number(txAmount)
         });
+        await logActivity(user, "ADDED_QUICK_CASH_OUT", { projectId: quickTx.projectId, amount: Number(txAmount) });
         toast.success("Cash Out recorded successfully");
       }
       setQuickTx(null);

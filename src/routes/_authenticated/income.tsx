@@ -8,6 +8,7 @@ import { Plus, Search, Pencil, Trash2, X, TrendingUp, Receipt, FileUp, ExternalL
 import { toast } from "sonner";
 import { getDb, getStorageRef } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
+import { logActivity } from "@/lib/activity-logger";
 import type { Project } from "@/lib/project-types";
 import { type IncomeRecord, type PaymentMethod, PAYMENT_METHOD_LABELS, fmt, fmtCompact } from "@/lib/project-types";
 
@@ -81,11 +82,12 @@ function IncomePage() {
         amount: editing.amount, paymentDate: editing.paymentDate,
         paymentMethod: editing.paymentMethod, category: editing.category,
         description: editing.description, invoiceUrl,
-        createdAt: Date.now(), createdBy: user.uid,
+        createdAt: Date.now(), createdBy: user.uid, createdByEmail: user.email,
       };
 
       if (editing.incomeId) {
         await updateDoc(doc(db, "income", id), { ...data });
+        await logActivity(user, "UPDATED_INCOME", { incomeId: id, amount: data.amount, projectId: data.projectId });
       } else {
         await setDoc(doc(db, "income", id), data);
         // Notification
@@ -95,6 +97,7 @@ function IncomePage() {
           message: `${fmt(data.amount)} received for "${data.projectName}" via ${PAYMENT_METHOD_LABELS[data.paymentMethod]}.`,
           read: false, createdAt: Date.now(), projectId: editing.projectId,
         });
+        await logActivity(user, "CREATED_INCOME", { incomeId: id, amount: data.amount, projectId: data.projectId });
       }
       toast.success(editing.incomeId ? "Income updated" : "Income recorded");
       setEditing(null);
@@ -109,6 +112,7 @@ function IncomePage() {
   const remove = async (id: string) => {
     if (!confirm("Delete this income record?")) return;
     await deleteDoc(doc(getDb(), "income", id));
+    await logActivity(user, "DELETED_INCOME", { incomeId: id });
     toast.success("Deleted");
     await load();
   };

@@ -15,6 +15,7 @@ import { getDb, getStorageRef } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { getCurrentPosition } from "@/lib/geo";
 import type { FieldPhoto } from "@/lib/firestore-types";
+import { logActivity } from "@/lib/activity-logger";
 
 export const Route = createFileRoute("/_authenticated/photos")({
   component: PhotosPage,
@@ -92,7 +93,9 @@ function PhotosPage() {
         createdAt: Date.now(),
         lat,
         lng,
+        uploadedByEmail: user.email,
       });
+      await logActivity(user, "UPLOADED_PHOTO", { caption, lat, lng });
       toast.success("Uploaded");
       setCaption("");
       setFile(null);

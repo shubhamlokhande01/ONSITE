@@ -11,6 +11,7 @@ import {
   type ExpenseRecord, type ExpenseType,
   EXPENSE_TYPE_LABELS, EXPENSE_TYPE_COLORS, fmt, fmtCompact,
 } from "@/lib/project-types";
+import { logActivity } from "@/lib/activity-logger";
 
 export const Route = createFileRoute("/_authenticated/expenses")({
   component: ExpensesPage,
@@ -77,11 +78,12 @@ function ExpensesPage() {
         amount: editing.amount, expenseType: editing.expenseType,
         vendorName: editing.vendorName, date: editing.date,
         description: editing.description, billUrl,
-        createdAt: Date.now(), createdBy: user.uid,
+        createdAt: Date.now(), createdBy: user.uid, createdByEmail: user.email,
       };
 
       if (editing.expenseId) {
         await updateDoc(doc(db, "expenses", id), { ...data });
+        await logActivity(user, "UPDATED_EXPENSE", { expenseId: id, amount: data.amount, projectId: data.projectId });
       } else {
         await setDoc(doc(db, "expenses", id), data);
         // Notification
@@ -91,6 +93,7 @@ function ExpensesPage() {
           message: `${fmt(data.amount)} ${EXPENSE_TYPE_LABELS[data.expenseType]} expense added for "${data.projectName}".`,
           read: false, createdAt: Date.now(), projectId: editing.projectId,
         });
+        await logActivity(user, "CREATED_EXPENSE", { expenseId: id, amount: data.amount, projectId: data.projectId });
       }
       toast.success(editing.expenseId ? "Expense updated" : "Expense recorded");
       setEditing(null);
@@ -105,6 +108,7 @@ function ExpensesPage() {
   const remove = async (id: string) => {
     if (!confirm("Delete this expense record?")) return;
     await deleteDoc(doc(getDb(), "expenses", id));
+    await logActivity(user, "DELETED_EXPENSE", { expenseId: id });
     toast.success("Deleted");
     await load();
   };

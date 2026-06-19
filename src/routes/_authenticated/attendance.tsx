@@ -17,6 +17,7 @@ import { getDb } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { getCurrentPosition, todayKey, formatTime } from "@/lib/geo";
 import type { AttendanceRecord } from "@/lib/firestore-types";
+import { logActivity } from "@/lib/activity-logger";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
   component: AttendancePage,
@@ -78,7 +79,8 @@ function AttendancePage() {
         checkInLat: pos.coords.latitude,
         checkInLng: pos.coords.longitude,
       };
-      await setDoc(doc(getDb(), "attendance", `${user.uid}_${date}`), record);
+      await setDoc(doc(getDb(), "attendance", `${user.uid}_${date}`), { ...record, recordedByEmail: user.email });
+      await logActivity(user, "MARKED_ATTENDANCE", { date, type: "check-in" });
       toast.success("Checked in");
       await load();
     } catch (e) {
@@ -97,7 +99,9 @@ function AttendancePage() {
         checkOutTime: Date.now(),
         checkOutLat: pos.coords.latitude,
         checkOutLng: pos.coords.longitude,
+        recordedByEmail: user.email,
       });
+      await logActivity(user, "MARKED_ATTENDANCE", { date: todayKey(), type: "check-out" });
       toast.success("Checked out");
       await load();
     } catch (e) {

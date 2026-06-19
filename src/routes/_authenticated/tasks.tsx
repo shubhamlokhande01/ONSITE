@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { getDb } from "@/lib/firebase";
 import type { Task, Employee } from "@/lib/firestore-types";
 import { useAuth } from "@/lib/auth-context";
+import { logActivity } from "@/lib/activity-logger";
 
 export const Route = createFileRoute("/_authenticated/tasks")({
   component: TasksPage,
@@ -79,8 +80,10 @@ function TasksPage() {
         status: "pending",
         createdAt: Date.now(),
         createdBy: user?.uid ?? "",
+        createdByEmail: user?.email ?? "",
         createdAtServer: serverTimestamp(),
       });
+      await logActivity(user, "CREATED_TASK", { title: form.title, assignedTo: assignee?.fullName });
       toast.success("Task created");
       setCreating(false);
       setForm({
@@ -97,7 +100,8 @@ function TasksPage() {
   };
 
   const updateStatus = async (t: Task, status: Task["status"]) => {
-    await updateDoc(doc(getDb(), "tasks", t.taskId), { status });
+    await updateDoc(doc(getDb(), "tasks", t.taskId), { status, updatedByEmail: user?.email });
+    await logActivity(user, "UPDATED_TASK_STATUS", { taskId: t.taskId, status });
     toast.success("Status updated");
     await load();
   };

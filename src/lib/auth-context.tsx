@@ -26,6 +26,7 @@ import {
   where,
 } from "firebase/firestore";
 import { firebaseConfigured, getFirebaseAuth, getDb } from "./firebase";
+import { logActivity } from "./activity-logger";
 
 export type Role = "admin" | "employee";
 
@@ -126,6 +127,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profileImage: "",
       createdAt: serverTimestamp(),
     });
+    
+    await logActivity({ uid, email, role, fullName }, "SIGNED_UP", { method: "email" });
   };
 
   const signInWithGoogle = async () => {
@@ -159,6 +162,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profileImage: cred.user.photoURL ?? "",
         createdAt: serverTimestamp(),
       });
+      
+      await logActivity({ uid, email: email ?? "", role, fullName: displayName ?? "" }, "SIGNED_UP", { method: "google" });
     }
   };
 

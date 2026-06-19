@@ -8,6 +8,7 @@ import { getDb, getStorageRef } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import type { Project } from "@/lib/project-types";
 import { type ProjectDocument, type DocCategory, DOC_CATEGORY_LABELS } from "@/lib/project-types";
+import { logActivity } from "@/lib/activity-logger";
 
 export const Route = createFileRoute("/_authenticated/documents")({
   component: DocumentsPage,
@@ -71,8 +72,10 @@ function DocumentsPage() {
         url, fileType: file.type, fileSize: file.size,
         uploadedAt: Date.now(), uploadedBy: user.uid,
         uploadedByName: user.fullName || user.email,
+        uploadedByEmail: user.email,
       };
       await setDoc(doc(getDb(), "documents", id), data);
+      await logActivity(user, "UPLOADED_DOCUMENT", { docId: id, name: data.name, projectId: data.projectId });
       toast.success("Document uploaded");
       setShowModal(false);
       setFile(null);
@@ -88,6 +91,7 @@ function DocumentsPage() {
   const remove = async (docId: string, name: string) => {
     if (!confirm(`Delete "${name}"?`)) return;
     await deleteDoc(doc(getDb(), "documents", docId));
+    await logActivity(user, "DELETED_DOCUMENT", { docId, name });
     toast.success("Deleted");
     await load();
   };

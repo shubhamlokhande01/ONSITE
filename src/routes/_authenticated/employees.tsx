@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { getDb } from "@/lib/firebase";
 import type { Employee } from "@/lib/firestore-types";
 import { useAuth } from "@/lib/auth-context";
+import { logActivity } from "@/lib/activity-logger";
 
 export const Route = createFileRoute("/_authenticated/employees")({
   component: EmployeesPage,
@@ -63,10 +64,12 @@ function EmployeesPage() {
       if (editing.employeeId && items.find((i) => i.employeeId === editing.employeeId)) {
         const { employeeId, ...rest } = editing;
         await updateDoc(doc(db, "employees", employeeId), rest);
+        await logActivity(user, "UPDATED_EMPLOYEE", { employeeId, fullName: editing.fullName });
         toast.success("Employee updated");
       } else {
         const id = editing.employeeId || crypto.randomUUID();
-        await setDoc(doc(db, "employees", id), { ...editing, employeeId: id });
+        await setDoc(doc(db, "employees", id), { ...editing, employeeId: id, createdByEmail: user?.email });
+        await logActivity(user, "CREATED_EMPLOYEE", { employeeId: id, fullName: editing.fullName });
         toast.success("Employee added");
       }
       setEditing(null);
@@ -79,6 +82,7 @@ function EmployeesPage() {
   const remove = async (id: string) => {
     if (!confirm("Delete this employee?")) return;
     await deleteDoc(doc(getDb(), "employees", id));
+    await logActivity(user, "DELETED_EMPLOYEE", { employeeId: id });
     toast.success("Deleted");
     await load();
   };
